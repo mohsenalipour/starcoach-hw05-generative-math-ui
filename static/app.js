@@ -1,3 +1,4 @@
+import { fastVisual, DomainError } from './fast-math.mjs';
 const $ = (id) => document.getElementById(id);
 const examples = {
   tangent: 'مشتق چیست؟ با یک مثال ساده توضیح بده و کمک کن شیب لحظه‌ای را روی نمودار ببینم.',
@@ -10,6 +11,7 @@ const kindLabels = {steps:'مراحل حل',function:'نمودار تابع',tan
 const verificationLabels = {symbolically_checked:'نتیجه بررسی شد',reviewed_with_tool:'بازبینی با ابزار',model_reviewed:'بازبینی آموزشی',failed_review:'تأیید نشد',not_applicable:'نیاز به ادامه'};
 let sessionId = null, busy = false, health = null, turns = [], currentSpec = null, currentData = null, activeTurn = -1;
 let visualEpoch = 0, sampleTimer = null, sampling = false, pendingSample = false;
+let renderFrame = 0;
 const svg = $('chart'), tooltip = $('chart-tooltip'), loader = $('chart-loader');
 const ns = 'http://www.w3.org/2000/svg';
 const number = (n) => Number(n).toLocaleString('en-US',{maximumFractionDigits:4});
@@ -67,7 +69,7 @@ function renderAnswer(article,result,index){
   const route=el('details','route-details');route.append(el('summary','','چطور به این پاسخ رسیدیم؟'));const list=el('ul','route-list');s.trace.forEach(event=>{const li=el('li','',nodeLabels[event.node]||event.node);li.title=event.node+': '+event.elapsed_ms+' ms';list.append(li);});route.append(list);article.append(route);
   const select=el('button','turn-select','نمایش بصری این پاسخ');select.onclick=()=>activateTurn(index);article.append(select);
 }
-function activateTurn(index){activeTurn=index;document.querySelectorAll('.turn').forEach(a=>a.classList.remove('active'));const button=document.querySelectorAll('.turn-select')[index];button?.closest('.turn').classList.add('active');const r=turns[index].result;currentSpec=structuredClone(r.visual);currentData=r.data;visualEpoch++;$('visual-badge').textContent=kindLabels[currentSpec.kind];$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption||'نمایش متناسب با پاسخ؛ مراحل را در گفت‌وگو بررسی کن.';renderVisual(currentSpec,currentData,r.state);renderControls();}
+function activateTurn(index){resetInteractive();activeTurn=index;document.querySelectorAll('.turn').forEach(a=>a.classList.remove('active'));const button=document.querySelectorAll('.turn-select')[index];button?.closest('.turn').classList.add('active');const r=turns[index].result;currentSpec=structuredClone(r.visual);currentData=r.data;visualEpoch++;$('visual-badge').textContent=kindLabels[currentSpec.kind];$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption||'نمایش متناسب با پاسخ؛ مراحل را در گفت‌وگو بررسی کن.';renderVisual(currentSpec,currentData,r.state);renderControls();}
 $('new-button').onclick=async()=>{if(busy)return;try{if(sessionId)await api('/api/reset',{session_id:sessionId});sessionId=null;turns=[];activeTurn=-1;$('thread').replaceChildren(el('div','welcome','گفت‌وگوی تازه آماده است. از یک سؤال شروع کن.'));$('export-button').disabled=true;await preview();prefill('');}catch(e){toast(e.message);}};
 $('export-button').onclick=()=>{const file=new Blob([JSON.stringify({exported_at:new Date().toISOString(),turns},null,2)],{type:'application/json'});const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='milo-conversation.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);};
 
@@ -81,7 +83,8 @@ function renderVisual(spec,data,state){
   if(['function','tangent','integral'].includes(spec.kind)){drawChart(spec,data);legend('تابع');if(spec.kind==='tangent')legend('خط مماس','tangent');if(spec.kind==='integral')legend('انباشت علامت‌دار','area');}
   else if(spec.kind==='geometry')drawGeometry(data);
   else {svg.style.display='none';const box=el('div',spec.kind==='matrix'?'matrix-visual':'steps-visual');if(spec.kind==='matrix')formula(box,data.latex,true);else{const steps=state?.status==='answered'?state.draft.steps:['سؤال را بنویس.','مراحل توضیح را دنبال کن.','برای فهم بهتر، سؤال بعدی را بپرس.'];steps.forEach((step,i)=>{const line=el('div','visual-step');line.append(el('span','',String(i+1)));const p=el('p');rich(p,step);line.append(p);box.append(line);});} $('chart-box').prepend(box);}
-  $('visual-notice').textContent='تغییر کنترل‌ها برای کاوش این مثال است؛ پاسخ ثبت‌شدهٔ سؤال را تغییر نمی‌دهد.';
+  $('visual-notice').textContent=data.approximate?'مقدار انتگرال فعلاً تقریب عددی است؛ محاسبهٔ دقیق در پس‌زمینه به‌روز می‌شود.':'تغییر کنترل‌ها برای کاوش این مثال است؛ پاسخ ثبت‌شدهٔ سؤال را تغییر نمی‌دهد.';
+  $('chart-box').dataset.engine=data.local?'local':'server';
 }
 function legend(text,role=''){const item=el('span','legend-item');item.append(el('i','legend-dot '+role),document.createTextNode(text));$('chart-legend').append(item);}
 function drawChart(spec,data){
@@ -120,11 +123,31 @@ function renderControls(){
   }
   for(const p of currentSpec.parameters||[])control(p.name,p.label,p.minimum,p.maximum,p.value,p.step,v=>p.value=v);
 }
-function queueSample(){pendingSample=true;visualEpoch++;clearTimeout(sampleTimer);sampleTimer=setTimeout(resample,180);}
+function resetInteractive(){
+  visualEpoch++;pendingSample=false;clearTimeout(sampleTimer);
+  if(renderFrame)cancelAnimationFrame(renderFrame);
+  renderFrame=0;loader.hidden=true;
+}
+function queueSample(){
+  visualEpoch++;pendingSample=false;clearTimeout(sampleTimer);
+  if(renderFrame)return;
+  renderFrame=requestAnimationFrame(()=>{
+    renderFrame=0;const started=performance.now();
+    try{
+      const data=fastVisual(currentSpec);currentData=data;
+      renderVisual(currentSpec,data,activeTurn>=0?turns[activeTurn].result.state:null);
+      $('chart-box').dataset.updateMs=(performance.now()-started).toFixed(2);
+      if(data.approximate){pendingSample=true;sampleTimer=setTimeout(resample,350);}
+    }catch(error){
+      if(error instanceof DomainError){$('metrics').replaceChildren();svg.replaceChildren();$('visual-notice').textContent=error.message;}
+      else {pendingSample=true;sampleTimer=setTimeout(resample,180);}
+    }
+  });
+}
 async function resample(){if(sampling||!pendingSample||!currentSpec)return;sampling=true;pendingSample=false;const epoch=visualEpoch,spec=structuredClone(currentSpec);loader.hidden=false;
   try{const {data}=await api('/api/visual',{visual:spec});if(epoch===visualEpoch){currentData=data;renderVisual(spec,data,activeTurn>=0?turns[activeTurn].result.state:null);}}
   catch(error){if(epoch===visualEpoch){$('metrics').replaceChildren();svg.replaceChildren();$('visual-notice').textContent='این بازه قابل محاسبه نیست. کنترل‌ها را تغییر بده تا نمایش دوباره ساخته شود.';toast(error.message);}}
   finally{sampling=false;loader.hidden=true;if(pendingSample)resample();}
 }
-async function preview(){currentSpec={kind:'tangent',title:'شیب را جابه‌جا کن، تغییر را ببین',caption:'یک نمونهٔ آموزشی از تابع x²؛ سؤال تو، نمایش مناسب خودش را می‌سازد.',expression:'x**2',x_min:-3,x_max:3,focus:1,lower:0,upper:2,shape:'right_triangle',parameters:[],matrix:[],formulas:[]};visualEpoch++;$('visual-badge').textContent='پیش‌نمایش آموزشی';$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption;const {data}=await api('/api/visual',{visual:currentSpec});currentData=data;renderVisual(currentSpec,data);renderControls();}
+async function preview(){resetInteractive();currentSpec={kind:'tangent',title:'شیب را جابه‌جا کن، تغییر را ببین',caption:'یک نمونهٔ آموزشی از تابع x²؛ سؤال تو، نمایش مناسب خودش را می‌سازد.',expression:'x**2',x_min:-3,x_max:3,focus:1,lower:0,upper:2,shape:'right_triangle',parameters:[],matrix:[],formulas:[]};visualEpoch++;$('visual-badge').textContent='پیش‌نمایش آموزشی';$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption;const data=fastVisual(currentSpec);currentData=data;renderVisual(currentSpec,data);renderControls();}
 try{health=await api('/api/health');$('connection-dot').classList.add(health.ready?(health.demo?'offline':'ready'):'offline');$('connection-label').replaceChildren(document.createTextNode(health.ready?(health.demo?'نمونه‌های آفلاین':'مدرس آماده است'):'تنظیمات مدل نیاز به بررسی دارد'),el('small','',health.model||'فایل .env را تنظیم کن'));$('demo-banner').hidden=!health.demo;if(!health.ready)toast(health.message);await preview();}catch(error){toast(error.message);}
