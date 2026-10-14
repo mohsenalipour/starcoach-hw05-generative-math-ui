@@ -1,6 +1,8 @@
 import { fastVisual, DomainError } from './fast-math.mjs';
 import { MathfieldElement, convertAsciiMathToLatex } from './vendor/mathlive/mathlive.min.mjs';
 import { mathSegments, normalizeAscii, insertMath, resultEquation } from './math-text.mjs';
+import { formulaTemplates, keyboardLayouts } from './editor-config.mjs';
+import { createViewGuard, stepHeading } from './view-state.mjs';
 MathfieldElement.fontsDirectory='/static/vendor/mathlive/fonts';
 MathfieldElement.soundsDirectory=null;
 const $ = (id) => document.getElementById(id);
@@ -17,6 +19,8 @@ let sessionId = null, busy = false, health = null, turns = [], currentSpec = nul
 let visualEpoch = 0, sampleTimer = null, sampling = false, pendingSample = false;
 let renderFrame = 0;
 let histories=[], attachment=null, imageBusy=false, historyTarget=null;
+let switchingConversation=false;
+const viewGuard=createViewGuard();
 const svg = $('chart'), tooltip = $('chart-tooltip'), loader = $('chart-loader');
 const ns = 'http://www.w3.org/2000/svg';
 const number = (n) => Number(n).toLocaleString('en-US',{maximumFractionDigits:4});
@@ -39,7 +43,7 @@ function rich(node, text) { // Untrusted prose is always text; KaTeX receives ma
     else node.append(document.createTextNode(part.text));
   }
 }
-function setBusy(value) {busy=value;$('send-button').disabled=value||imageBusy;$('new-button').disabled=value||imageBusy;$('image-button').disabled=value||imageBusy||!!(health&&!health.vision);$('progress').hidden=!value;$('question').setAttribute('aria-busy',String(value));renderHistory();}
+function setBusy(value) {busy=value;$('send-button').disabled=value||imageBusy||switchingConversation;$('new-button').disabled=value||imageBusy;$('image-button').disabled=value||imageBusy||switchingConversation||!!(health&&!health.vision);$('formula-button').disabled=switchingConversation;document.querySelectorAll('.turn-select').forEach(button=>button.disabled=switchingConversation);$('question').readOnly=switchingConversation;$('progress').hidden=!value;$('question').setAttribute('aria-busy',String(value||switchingConversation));renderHistory();}
 function updateQuestion(){const text=$('question').value;$('char-count').textContent=text.length.toLocaleString('fa')+' / ۴۰۰۰';const hasMath=mathSegments(text).some(x=>x.kind==='math');$('question-preview').hidden=!hasMath;$('question-preview-content').replaceChildren();if(hasMath)rich($('question-preview-content'),text);}
 function prefill(text) {$('question').value=text;updateQuestion();$('question').focus();$('composer').scrollIntoView({behavior:'smooth',block:'nearest'});}
 $('question').addEventListener('input',updateQuestion);
@@ -53,7 +57,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')mobileSettings(false
 $('guide-dialog').addEventListener('click',e=>{if(e.target===$('guide-dialog'))$('guide-dialog').close();});
 $('question').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('composer').requestSubmit();}});
 $('composer').addEventListener('submit', async (e)=>{
-  e.preventDefault();if(busy||imageBusy)return;const question=$('question').value.trim();if(!question)return;
+  e.preventDefault();if(busy||imageBusy||switchingConversation)return;const question=$('question').value.trim();if(!question)return;
   if(health&&!health.ready){toast(health.message);return;}
   setBusy(true);$('welcome')?.remove();document.body.classList.add('has-conversation');const sentAttachment=attachment;const article=userTurn(question,sentAttachment);$('thread').append(article);$('question').value='';updateQuestion();article.scrollIntoView({block:'nearest',behavior:'smooth'});
   const started=Date.now();let clock=setInterval(()=>$('elapsed').textContent=Math.floor((Date.now()-started)/1000)+' s',1000);
@@ -76,7 +80,7 @@ function renderAnswer(article,result,index){
   if(s.status!=='answered'){const plain=el('p','answer-plain');rich(plain,s.final_answer);article.append(plain);}else{
     const d=s.draft,intro=el('p','answer-intro');rich(intro,d.introduction);article.append(intro);
     const details=[];
-    d.steps.forEach((text,i)=>{const clean=text.replace(/^(?:\s*\d+[.)]\s+)+/,'');const item=el('details','lesson-step');item.open=i===0;const summary=el('summary');const label=el('span');rich(label,clean.split(/\n|\\\[/)[0]||'بررسی رابطهٔ ریاضی');summary.append(el('span','step-number',String(i+1)),label);const content=el('div','step-text');rich(content,clean);item.append(summary,content);article.append(item);details.push(item);});
+    d.steps.forEach((text,i)=>{const clean=text.replace(/^(?:\s*\d+[.)]\s+)+/,'');const item=el('details','lesson-step');item.open=i===0;const summary=el('summary');const label=el('span','lesson-summary');rich(label,stepHeading(clean)||'بررسی رابطهٔ ریاضی');summary.append(el('span','step-number',String(i+1)),label);const content=el('div','step-text');rich(content,clean);item.append(summary,content);article.append(item);details.push(item);});
     const actions=el('div','step-actions'),expand=el('button','text-button','همهٔ مراحل را باز کن');expand.onclick=()=>{const open=details.some(d=>!d.open);details.forEach(d=>d.open=open);expand.textContent=open?'مراحل را جمع کن':'همهٔ مراحل را باز کن';};const simpler=el('button','text-button','ساده‌تر توضیح بده');simpler.onclick=()=>prefill('پاسخ قبلی را ساده‌تر و با یک مثال دیگر توضیح بده.');actions.append(expand,simpler);article.append(actions);
     if(d.example){const block=el('div','example-block');block.append(el('h4','','یک مثال برای فهم بهتر'));const p=el('p','example-text');rich(p,d.example);block.append(p);article.append(block);}
     if(d.result){const card=el('div','result-card');card.append(el('small','','پاسخ نهایی'));const math=el('div','result-math');let latex=d.result;try{latex=resultEquation(d.result,s.analysis?.tool_request,convertAsciiMathToLatex);}catch{}formula(math,latex,true);card.append(math);article.append(card);}
@@ -85,7 +89,7 @@ function renderAnswer(article,result,index){
   const route=el('details','route-details');route.append(el('summary','','چطور به این پاسخ رسیدیم؟'));const list=el('ul','route-list');s.trace.forEach(event=>{const li=el('li','',nodeLabels[event.node]||event.node);li.title=event.node+': '+event.elapsed_ms+' ms';list.append(li);});route.append(list);article.append(route);
   const select=el('button','turn-select','نمایش بصری این پاسخ');select.onclick=()=>activateTurn(index);article.append(select);
 }
-function activateTurn(index){resetInteractive();activeTurn=index;document.querySelectorAll('.turn').forEach(a=>a.classList.remove('active'));const button=document.querySelectorAll('.turn-select')[index];button?.closest('.turn').classList.add('active');const r=turns[index].result;currentSpec=structuredClone(r.visual);currentData=r.data;visualEpoch++;$('visual-badge').textContent=kindLabels[currentSpec.kind];$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption||'نمایش متناسب با پاسخ؛ مراحل را در گفت‌وگو بررسی کن.';renderVisual(currentSpec,currentData,r.state);renderControls();}
+function activateTurn(index){resetInteractive();activeTurn=index;document.querySelectorAll('.turn').forEach(a=>a.classList.remove('active'));const button=document.querySelectorAll('.turn-select')[index];button?.closest('.turn').classList.add('active');const r=turns[index]?.result;if(!r?.visual||!r?.data){resetLab();return;}currentSpec=structuredClone(r.visual);currentData=structuredClone(r.data);visualEpoch++;$('visual-badge').textContent=kindLabels[currentSpec.kind];renderVisual(currentSpec,currentData,r.state);renderControls();$('exploration').dataset.conversation=sessionId||'';$('exploration').dataset.turn=String(index);}
 $('new-button').onclick=()=>newConversation();
 $('export-button').onclick=()=>{const file=new Blob([JSON.stringify({exported_at:new Date().toISOString(),turns},null,2)],{type:'application/json'});const link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='milo-conversation.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);};
 
@@ -103,6 +107,7 @@ function renderVisual(spec,data,state){
   else {svg.style.display='none';const box=el('div',spec.kind==='matrix'?'matrix-visual':'steps-visual');if(spec.kind==='matrix')formula(box,data.latex,true);else{const steps=state?.status==='answered'?state.draft.steps:['سؤال را بنویس.','مراحل توضیح را دنبال کن.','برای فهم بهتر، سؤال بعدی را بپرس.'];steps.forEach((step,i)=>{const line=el('div','visual-step');line.append(el('span','',String(i+1)));const p=el('p');rich(p,step);line.append(p);box.append(line);});} $('chart-box').prepend(box);}
   $('visual-notice').textContent=data.approximate?'مقدار انتگرال فعلاً تقریب عددی است؛ محاسبهٔ دقیق در پس‌زمینه به‌روز می‌شود.':'تغییر کنترل‌ها برای کاوش این مثال است؛ پاسخ ثبت‌شدهٔ سؤال را تغییر نمی‌دهد.';
   $('chart-box').dataset.engine=data.local?'local':'server';
+  delete $('chart-box').dataset.updateMs;
 }
 function legend(text,role=''){const item=el('span','legend-item');item.append(el('i','legend-dot '+role),document.createTextNode(text));$('chart-legend').append(item);}
 function drawChart(spec,data){
@@ -167,7 +172,17 @@ async function resample(){if(sampling||!pendingSample||!currentSpec)return;sampl
   catch(error){if(epoch===visualEpoch){$('metrics').replaceChildren();svg.replaceChildren();$('visual-notice').textContent='این بازه قابل محاسبه نیست. کنترل‌ها را تغییر بده تا نمایش دوباره ساخته شود.';toast(error.message);}}
   finally{sampling=false;loader.hidden=true;if(pendingSample)resample();}
 }
-async function preview(){resetInteractive();currentSpec={kind:'tangent',title:'شیب را جابه‌جا کن، تغییر را ببین',caption:'یک نمونهٔ آموزشی از تابع x²؛ سؤال تو، نمایش مناسب خودش را می‌سازد.',expression:'x**2',x_min:-3,x_max:3,focus:1,lower:0,upper:2,shape:'right_triangle',parameters:[],matrix:[],formulas:[]};visualEpoch++;$('visual-badge').textContent='پیش‌نمایش آموزشی';$('visual-title').textContent=currentSpec.title;$('visual-caption').textContent=currentSpec.caption;const data=fastVisual(currentSpec);currentData=data;renderVisual(currentSpec,data);renderControls();}
+function resetLab(loading=false){
+  resetInteractive();currentSpec=null;currentData=null;activeTurn=-1;
+  svg.replaceChildren();svg.onpointermove=null;svg.onpointerdown=null;svg.onpointerleave=null;
+  svg.style.display='none';tooltip.hidden=true;tooltip.textContent='';
+  const empty=el('div','lab-empty');empty.append(el('span','lab-empty-icon','∫'),el('h4','',loading?'در حال باز کردن گفت‌وگو…':'اینجا ریاضی را می‌بینی'),el('p','',loading?'نمایش مربوط به همین گفت‌وگو آماده می‌شود.':'یک سؤال بپرس؛ نمودار، شکل یا مراحل مناسب آن اینجا ساخته می‌شود.'));
+  $('chart-box').replaceChildren(svg,tooltip,loader,empty);$('chart-box').dataset.engine='empty';delete $('chart-box').dataset.updateMs;
+  for(const id of ['formula-strip','metrics','controls','chart-legend'])$(id).replaceChildren();
+  $('visual-title').textContent=loading?'آزمایشگاه گفت‌وگوی انتخاب‌شده':'آزمایشگاه گفت‌وگوی تازه';
+  $('visual-caption').textContent='';$('visual-notice').textContent='';$('visual-badge').textContent=loading?'در حال بارگذاری':'آمادهٔ سؤال';
+  $('exploration').dataset.conversation='';delete $('exploration').dataset.turn;
+}
 
 function userTurn(question,image){const article=el('article','turn'),user=el('div','user-message');user.append(el('span','user-caption','سؤال تو'));if(image?.thumbnail){const img=el('img','question-image');img.src=image.thumbnail;img.alt='عکس مسئله';user.append(img);}const text=el('div');text.dir='auto';rich(text,question);user.append(text);article.append(user);return article;}
 function rememberSession(){const key=health?.demo?'milo-demo-session':'milo-session';if(sessionId)localStorage.setItem(key,sessionId);else localStorage.removeItem(key);}
@@ -181,20 +196,32 @@ function renderHistory(){
   }
 }
 $('history-search').oninput=renderHistory;
-async function openConversation(id){if(busy||imageBusy)return;const record=await api('/api/conversations/'+encodeURIComponent(id));sessionId=id;turns=record.turns;rememberSession();clearAttachment();$('thread').replaceChildren();document.body.classList.toggle('has-conversation',turns.length>0);conversationTitle(record.title);$('export-button').disabled=!turns.length;turns.forEach((turn,i)=>{const article=userTurn(turn.question,turn.result.attachment);renderAnswer(article,turn.result,i);$('thread').append(article);});if(turns.length){activateTurn(turns.length-1);$('level').value=turns.at(-1).result.state.level_choice||'auto';$('language').value=turns.at(-1).result.state.language||'fa';}else await preview();renderHistory();mobileSettings(false);$('thread').scrollTop=$('thread').scrollHeight;prefill('');}
-async function newConversation(){if(busy||imageBusy)return;sessionId=null;rememberSession();turns=[];activeTurn=-1;clearAttachment();$('thread').replaceChildren(el('div','welcome','گفت‌وگوی تازه آماده است. از یک سؤال شروع کن.'));$('conversation-title').textContent='میز مطالعه';document.body.classList.remove('has-conversation');$('export-button').disabled=true;await preview();renderHistory();prefill('');}
+async function openConversation(id){
+  if(busy||imageBusy)return;
+  const ticket=viewGuard.next();switchingConversation=true;setBusy(false);resetLab(true);
+  try{
+    const record=await api('/api/conversations/'+encodeURIComponent(id));
+    if(!viewGuard.current(ticket))return;
+    sessionId=id;turns=record.turns;rememberSession();clearAttachment();$('thread').replaceChildren();
+    document.body.classList.toggle('has-conversation',turns.length>0);conversationTitle(record.title);$('export-button').disabled=!turns.length;
+    turns.forEach((turn,i)=>{const article=userTurn(turn.question,turn.result.attachment);renderAnswer(article,turn.result,i);$('thread').append(article);});
+    if(turns.length){activateTurn(turns.length-1);$('level').value=turns.at(-1).result.state.level_choice||'auto';$('language').value=turns.at(-1).result.state.language||'fa';}else resetLab();
+    renderHistory();mobileSettings(false);$('thread').scrollTop=$('thread').scrollHeight;prefill('');
+  }catch(error){if(viewGuard.current(ticket)){if(turns.length)activateTurn(turns.length-1);else resetLab();toast(error.message);}}
+  finally{if(viewGuard.current(ticket)){switchingConversation=false;setBusy(false);}}
+}
+async function newConversation(){if(busy||imageBusy)return;viewGuard.next();switchingConversation=false;sessionId=null;rememberSession();turns=[];clearAttachment();$('thread').replaceChildren(el('div','welcome','گفت‌وگوی تازه آماده است. از یک سؤال شروع کن.'));$('conversation-title').textContent='میز مطالعه';document.body.classList.remove('has-conversation');$('export-button').disabled=true;resetLab();setBusy(false);prefill('');}
 $('close-rename').onclick=()=>$('rename-dialog').close();$('rename-form').onsubmit=async e=>{e.preventDefault();try{await api('/api/conversations/rename',{session_id:historyTarget,title:$('rename-input').value});if(sessionId===historyTarget)conversationTitle($('rename-input').value);$('rename-dialog').close();await refreshHistory();}catch(error){toast(error.message);}};
 $('cancel-delete').onclick=()=>$('delete-dialog').close();$('confirm-delete').onclick=async()=>{try{await api('/api/conversations/delete',{session_id:historyTarget});$('delete-dialog').close();if(sessionId===historyTarget)await newConversation();await refreshHistory();}catch(error){toast(error.message);}};
 
 const editor=$('math-editor');editor.mathVirtualKeyboardPolicy='manual';
-window.mathVirtualKeyboard.addEventListener('geometrychange',()=>{$('math-keyboard').style.height=window.mathVirtualKeyboard.boundingRect.height+'px';});
+window.mathVirtualKeyboard.addEventListener('geometrychange',()=>{const keyboard=window.mathVirtualKeyboard,area=$('math-keyboard');area.classList.toggle('keyboard-is-open',keyboard.visible);area.style.height=(keyboard.visible?Math.max(180,keyboard.boundingRect.height)+16:0)+'px';$('keyboard-button').textContent=keyboard.visible?'⌨ جمع کردن کیبورد':'⌨ نمایش کیبورد ریاضی';$('keyboard-button').setAttribute('aria-expanded',String(keyboard.visible));});
 let questionCursor={start:0,end:0};
-const templates=[['کسر','\\frac{#0}{#0}'],['توان','#0^{#0}'],['ریشه','\\sqrt{#0}'],['انتگرال','\\int_{#0}^{#0} #0 \\,dx'],['مشتق','\\frac{d}{dx}#0'],['حد','\\lim_{x\\to #0}#0'],['مجموع','\\sum_{n=#0}^{#0}#0'],['ماتریس','\\begin{bmatrix}#0&#0\\\\#0&#0\\end{bmatrix}'],['بردار','\\vec{#0}'],['کسر جزئی','\\frac{\\partial #0}{\\partial #0}'],['یونانی','\\alpha+\\beta+\\theta'],['احتمال','P\\left(#0\\mid #0\\right)']];
-for(const [name,template]of templates){const button=el('button','',name);button.type='button';button.onclick=()=>{editor.focus();editor.insert(template,{selectionMode:'placeholder'});syncFormula();};$('formula-templates').append(button);}
+for(const template of formulaTemplates){const button=el('button','template-symbol');button.type='button';button.setAttribute('aria-label',template.name);button.dataset.tooltip=template.name;button.title=template.name;const symbol=el('span');symbol.setAttribute('aria-hidden','true');formula(symbol,template.icon);button.append(symbol);button.onclick=()=>{editor.focus();editor.insert(template.insert,{selectionMode:'placeholder'});syncFormula();};$('formula-templates').append(button);}
 function syncFormula(){const latex=editor.getValue('latex');$('latex-source').value=latex;let valid=true;try{window.katex.renderToString(latex,{throwOnError:true,trust:false,maxExpand:500,maxSize:10});}catch{valid=false;}$('formula-error').textContent=valid?'':'این ساختار هنوز کامل نیست یا در نمایش پشتیبانی نمی‌شود.';$('insert-formula').disabled=!valid||!latex.trim()||latex.length>1200;}
 editor.addEventListener('input',syncFormula);
 $('latex-source').oninput=()=>{editor.setValue($('latex-source').value);syncFormula();};
-$('formula-button').onclick=()=>{const q=$('question');questionCursor={start:q.selectionStart,end:q.selectionEnd};$('formula-dialog').showModal();window.mathVirtualKeyboard.container=$('math-keyboard');window.mathVirtualKeyboard.layouts=['numeric','symbols','greek','alphabetic'];syncFormula();editor.focus();};
+$('formula-button').onclick=()=>{const q=$('question');questionCursor={start:q.selectionStart,end:q.selectionEnd};$('math-keyboard').classList.add('keyboard-is-open');$('math-keyboard').style.height=window.matchMedia('(max-width:680px)').matches?'210px':'242px';$('formula-dialog').showModal();window.mathVirtualKeyboard.container=$('math-keyboard');window.mathVirtualKeyboard.layouts=structuredClone(keyboardLayouts);syncFormula();editor.focus();window.mathVirtualKeyboard.show();};
 $('keyboard-button').onclick=()=>{editor.focus();window.mathVirtualKeyboard.visible=!window.mathVirtualKeyboard.visible;};
 $('formula-dialog').addEventListener('close',()=>window.mathVirtualKeyboard.hide());
 $('close-formula').onclick=()=>$('formula-dialog').close();
@@ -213,4 +240,4 @@ $('image-file').onchange=async()=>{
   }catch(error){clearAttachment();toast(error.message);}
   finally{imageBusy=false;$('image-button').replaceChildren(el('span','','▧'),document.createTextNode(' عکس مسئله'));$('remove-attachment').disabled=false;setBusy(false);}
 };
-try{health=await api('/api/health');$('connection-dot').classList.add(health.ready?(health.demo?'offline':'ready'):'offline');$('connection-label').replaceChildren(document.createTextNode(health.ready?(health.demo?'نمونه‌های آفلاین':'مدرس آماده است'):'تنظیمات مدل نیاز به بررسی دارد'),el('small','',health.model||'فایل .env را تنظیم کن'));$('demo-banner').hidden=!health.demo;$('image-button').disabled=!health.vision;$('image-button').title=health.vision?'عکس برای خواندن مسئله به سرویس مدل ارسال می‌شود.':'خواندن عکس در حالت آفلاین فعال نیست.';if(!health.ready)toast(health.message);maths(document.querySelector('.hero'));await preview();await refreshHistory();const saved=localStorage.getItem(health.demo?'milo-demo-session':'milo-session');if(saved&&histories.some(h=>h.id===saved))await openConversation(saved);}catch(error){toast(error.message);}
+try{health=await api('/api/health');$('connection-dot').classList.add(health.ready?(health.demo?'offline':'ready'):'offline');$('connection-label').replaceChildren(document.createTextNode(health.ready?(health.demo?'نمونه‌های آفلاین':'مدرس آماده است'):'تنظیمات مدل نیاز به بررسی دارد'),el('small','',health.model||'فایل .env را تنظیم کن'));$('demo-banner').hidden=!health.demo;$('image-button').disabled=!health.vision;$('image-button').title=health.vision?'عکس برای خواندن مسئله به سرویس مدل ارسال می‌شود.':'خواندن عکس در حالت آفلاین فعال نیست.';if(!health.ready)toast(health.message);maths(document.querySelector('.hero'));resetLab();await refreshHistory();const saved=localStorage.getItem(health.demo?'milo-demo-session':'milo-session');if(saved&&histories.some(h=>h.id===saved))await openConversation(saved);}catch(error){toast(error.message);}

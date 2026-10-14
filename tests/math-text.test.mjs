@@ -46,6 +46,10 @@ test('legacy powers and fractions are math; normal prose and HTML stay text',()=
     const math=mathSegments(text).find(p=>p.kind==='math');assert.ok(math,text);
     assert.doesNotThrow(()=>katex.renderToString(convertAsciiMathToLatex(normalizeAscii(math.text)),{throwOnError:true}));
   }
+  const unicode=mathSegments('تابع f(x)=x³+2x را ببین').find(p=>p.kind==='math');
+  assert.equal(unicode.text,'f(x)=x³+2x');
+  assert.equal(normalizeAscii('x²+x₀'),'x^(2)+x_(0)');
+  assert.doesNotThrow(()=>katex.renderToString(convertAsciiMathToLatex(normalizeAscii(unicode.text)),{throwOnError:true}));
   assert.equal(mathSegments('This is ordinary prose.').some(p=>p.kind==='math'),false);
   assert.equal(mathSegments('<img src=x onerror=alert(1)>').map(p=>p.text).join(''),'<img src=x onerror=alert(1)>');
   assert.equal(mathSegments('x**2').some(p=>p.kind==='bold'),false);

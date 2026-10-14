@@ -5,12 +5,12 @@ export function mathSegments(value) {
   const out=[];
   function plain(s){
     // ASCII runs cannot swallow Persian words. Prose in English remains prose.
-    const run=/[A-Za-z0-9α-ωΑ-Ωπ∞√∫Σ][A-Za-z0-9α-ωΑ-Ωπ∞√∫Σ'′+−–\-*·×/^_=<>≤≥≠±.,()\[\]{}\s]*[A-Za-z0-9π∞()\]}]/g;
+    const run=/[A-Za-z0-9α-ωΑ-Ωπ∞√∫Σ][A-Za-z0-9α-ωΑ-Ωπ∞√∫Σ⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ⁺⁻⁽⁾₀₁₂₃₄₅₆₇₈₉'′+−–\-*·×/^_=<>≤≥≠±.,()\[\]{}\s]*[A-Za-z0-9π∞⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ⁾₀₁₂₃₄₅₆₇₈₉()\]}]/g;
     let last=0;
     for(const match of s.matchAll(run)){
       const candidate=match[0].trimEnd();
       if(candidate.length>220||/\b[A-Za-z]{4,}\b/.test(candidate.replace(/\b(?:sqrt|sin|cos|tan|log|exp|lim)\b/g,''))||
-          !/[=+*/^_≤≥≠×·]|[a-zα-ω]\s*[-−]\s*\d/.test(candidate))continue;
+          !/[=+*/^_≤≥≠×·⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ₀₁₂₃₄₅₆₇₈₉]|[a-zα-ω]\s*[-−]\s*\d/.test(candidate))continue;
       if(last<match.index)out.push({kind:'text',text:s.slice(last,match.index)});
       out.push({kind:'math',text:candidate,ascii:true,display:false});last=match.index+candidate.length;
     }
@@ -28,7 +28,10 @@ export function mathSegments(value) {
 }
 
 export function normalizeAscii(text){
-  return text.replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632))
+  const supers={'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','ⁿ':'n','⁺':'+','⁻':'-','⁽':'(','⁾':')'};
+  return text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ⁺⁻⁽⁾]+/g,s=>'^('+[...s].map(c=>supers[c]).join('')+')')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g,s=>'_('+[...s].map(c=>c.charCodeAt(0)-8320).join('')+')')
+    .replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632))
     .replace(/\*\*/g,'^').replace(/[−–]/g,'-').replace(/[·×]/g,'*').replace(/′/g,"'");
 }
 
