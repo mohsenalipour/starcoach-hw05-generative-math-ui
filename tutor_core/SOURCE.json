@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/mohsenalipour/starcoach-hw04-math-tutor",
+  "commit": "cc32dc67a59339ee1186b962713cb478da7c3999",
+  "sha256": {
+    "agent.py": "d57f4c270b0c437caee81d485a967ef7dd2c607ee42770c97e967f815b5fc95a",
+    "cli.py": "734f5133bc8ff3eee4ba9000fe382b2112201b2920c08e3dfaabc09b264bc562",
+    "graph.mmd": "19626521bc230c302e5645070de8aba3860e0144cc189a344ed74ec5a570b048",
+    "math_tools.py": "f837a4f45f046512d9aa8c5ee3301b6cc8e718f3d3d2b497df8c23159570a5fe",
+    "provider.py": "53b8a18aededd1d5fba53dd69f9fd9b32c57b2ee266bd8ba3227488953ce49a5",
+    "report.py": "adfe033450a2cf0db547cc90c2172936ea11d9170f1238974cd42bd3e569edee",
+    "requirements.lock.txt": "3c7ef4aa856212f7d4e5b39be3e52fd32ddd6a8830cb1832517a7f1f59c7ca48",
+    "requirements.txt": "09beb3261c1edb518b0ba96634fa64fde5354929d48bd6cf8f83153c3e39e474",
+    "terminal.py": "09f36fda83c83d26886a109ec5e0ea222551f157d1bbdca806d7f6deffe65e24"
+  },
+  "note": "All vendored core files are byte-identical to HW04. Browser and visual logic live outside tutor_core."
+}

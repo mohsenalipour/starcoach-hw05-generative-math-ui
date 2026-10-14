@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f5f0">
+  <title>مایلو · ریاضی را ببین و بفهم</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script defer src="/static/vendor/katex/katex.min.js"></script>
+  <script defer src="/static/vendor/katex/contrib/auto-render.min.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="مایلو، صفحهٔ اصلی"><span class="brand-mark">m<span>·</span></span><span>مایلو<small>MILO MATH STUDIO</small></span></a>
+    <button id="close-settings" class="mobile-close" aria-label="بستن تنظیمات">×</button>
+    <div class="sidebar-label">فضای یادگیری تو</div>
+    <button class="nav-item selected" id="workspace-nav"><span class="nav-icon">◈</span> میز مطالعه <span class="nav-dot"></span></button>
+    <button class="nav-item" id="examples-nav"><span class="nav-icon">▦</span> ایده‌هایی برای شروع</button>
+    <button class="nav-item" id="guide-button"><span class="nav-icon">⊙</span> راهنمای استفاده</button>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-label">متناسب با تو</div>
+    <label class="setting-label" for="level">سطح توضیح</label>
+    <select id="level"><option value="auto">تشخیص خودکار</option value="beginner">مبتدی · از پایه</option><option value="intermediate">متوسط · با جزئیات</option><option value="advanced">پیشرفته · دقیق و رسمی</option></select>
+    <label class="setting-label" for="language">زبان پاسخ</label>
+    <select id="language"><option value="fa">فارسی</option><option value="en">English</option><option value="auto">خودکار</option></select>
+    <div class="sidebar-note"><span>✧</span><p>هر سؤال، یک راه تازه<br>برای فهمیدن ریاضی.</p></div>
+    <div class="connection"><span class="status-dot" id="connection-dot"></span><div id="connection-label">در حال اتصال…<small>مدرس ریاضی مایلو</small></div></div>
+    <div class="sidebar-foot">تمرین پنجم · StarCoach</div>
+  </aside>
+
+  <main>
+    <header class="topbar"><div class="breadcrumb">فضای یادگیری <span>/</span> <strong>میز مطالعه</strong></div><div class="top-actions"><button id="settings-button" class="mobile-settings" aria-expanded="false">تنظیمات</button><button class="quiet-button" id="export-button" disabled>↓ ذخیرهٔ گفت‌وگو</button><button class="new-button" id="new-button">＋ گفت‌وگوی تازه</button></div></header>
+    <div class="demo-banner" id="demo-banner" hidden>دموی آفلاین · پاسخ‌های نمونه با همان گراف اجرا می‌شوند. برای سؤال آزاد، حالت اصلی را اجرا کن.</div>
+    <section class="hero"><div><div class="eyebrow"><span></span> یک همراه برای کشف، نه فقط حل کردن</div><h1>ریاضی را <em>ببین،</em><br class="mobile-break"> بعد بفهم.</h1><p>از یک سؤال شروع کن. با توضیح قدم‌به‌قدم و تصویرهای تعاملی، به جواب نزدیک شو.</p></div><div class="hero-note"><span class="note-spark">✦</span><span>کمتر حفظ کن.<br><strong>بیشتر کشف کن.</strong></span><svg viewBox="0 0 80 45" aria-hidden="true"><path d="M73 9Q43 47 9 26M9 26l7-12M9 26l14 5"/></svg></div></section>
+    <section class="examples" id="examples" aria-label="سؤال‌های پیشنهادی">
+      <button class="example" data-example="tangent"><span class="example-icon purple">↗</span><span><strong>مشتق، با یک نگاه</strong><small>شیب لحظه‌ای را روی نمودار ببین</small></span><span class="example-arrow">↖</span></button>
+      <button class="example" data-example="integral"><span class="example-icon green">∫</span><span><strong>انتگرال را لمس کن</strong><small>از سهم‌های کوچک تا یک مقدار کل</small></span><span class="example-arrow">↖</span></button>
+      <button class="example" data-example="geometry"><span class="example-icon orange">△</span><span><strong>هندسهٔ زنده</strong><small>ضلع‌ها را تغییر بده، رابطه را کشف کن</small></span><span class="example-arrow">↖</span></button>
+      <button class="example" data-example="function"><span class="example-icon blue">ƒ</span><span><strong>اگر ضریب عوض شود؟</strong><small>یک تابع، چند رفتار متفاوت</small></span><span class="example-arrow">↖</span></button>
+    </section>
+
+    <section class="study-grid">
+      <section class="conversation panel" aria-label="گفت‌وگو با مدرس">
+        <div class="panel-heading"><div><span class="tiny-icon">✧</span><h2>با هم حلش کنیم</h2></div><span class="subtle-label">یک سؤال، یک قدم جلوتر</span></div>
+        <div class="thread" id="thread" aria-live="polite">
+          <div class="welcome" id="welcome"><div class="welcome-orbit"><span>✧</span><i></i><i></i></div><h3>از کجا شروع کنیم؟</h3><p>یک مفهوم، یک مسئله یا حتی بخشی که<br>هنوز برایت روشن نیست را بنویس.</p><div class="welcome-tags"><span>توضیح ساده</span><span>مراحل روشن</span><span>بررسی پاسخ</span></div></div>
+        </div>
+        <div class="progress" id="progress" role="status" hidden><span class="spinner"></span><span id="progress-label">در حال بررسی سؤال…</span><span class="elapsed" id="elapsed"></span></div>
+        <form id="composer" class="composer"><label class="sr-only" for="question">سؤال ریاضی</label><textarea id="question" rows="2" maxlength="4000" dir="auto" placeholder="مثلاً: مشتق چیست و چرا به آن نیاز داریم؟"></textarea><div class="composer-bottom"><span>Enter برای ارسال <b>·</b> Shift + Enter برای خط بعد</span><button class="send-button" id="send-button" type="submit" aria-label="ارسال سؤال"><span>بپرس</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 12-14-7 4 7-4 7 14-7ZM9 12h10"/></svg></button></div></form>
+      </section>
+
+      <section class="exploration panel" aria-label="نمایش بصری متناسب با مسئله">
+        <div class="panel-heading"><div><span class="tiny-icon">◈</span><h2>ببین و کشف کن</h2></div><span class="visual-badge" id="visual-badge">پیش‌نمایش آموزشی</span></div>
+        <div class="visual-content"><div class="visual-title"><h3 id="visual-title">شیب را جابه‌جا کن، تغییر را ببین</h3><p id="visual-caption">یک نمونهٔ آموزشی از تابع x²؛ سؤال تو، نمایش مناسب خودش را می‌سازد.</p></div>
+          <div class="formula-strip" id="formula-strip"></div>
+          <div class="chart-box" id="chart-box"><svg id="chart" viewBox="0 0 600 340" role="img" aria-label="نمودار تعاملی ریاضی"></svg><div class="chart-tooltip" id="chart-tooltip" hidden></div><div class="chart-loader" id="chart-loader" hidden><span class="spinner"></span></div></div>
+          <div class="chart-legend" id="chart-legend"></div>
+          <div class="metrics" id="metrics"></div>
+          <div class="controls" id="controls"></div>
+          <p class="visual-notice" id="visual-notice">تغییر کنترل‌ها برای کاوش این مثال است؛ پاسخ ثبت‌شدهٔ سؤال را تغییر نمی‌دهد.</p>
+        </div>
+      </section>
+    </section>
+    <footer class="main-foot"><span>فهمیدن، از یک سؤال خوب شروع می‌شود.</span><span>ساخته‌شده برای یادگیری ✧</span></footer>
+  </main>
+  <dialog id="guide-dialog"><button id="close-guide" class="dialog-close" aria-label="بستن راهنما">×</button><span class="eyebrow">چطور از مایلو استفاده کنم؟</span><h2>سؤال بپرس، تصویر را کاوش کن.</h2><ol><li>سطح دلخواهت را انتخاب کن یا تشخیص را به مدرس بسپار.</li><li>سؤال را بنویس؛ پاسخ و مراحل حل در سمت گفت‌وگو می‌آیند.</li><li>نمایش کنار پاسخ متناسب با سؤال انتخاب می‌شود. کنترل‌ها را تغییر بده و نتیجه را ببین.</li><li>برای ادامه، دربارهٔ همان پاسخ سؤال بپرس. زمینهٔ مکالمه حفظ می‌شود.</li></ol><p>تغییر پارامترها فقط نمایشِ کاوش را به‌روز می‌کند. برای حل یک مسئله با عددهای جدید، سؤال تازه بپرس.</p><p>نمودارها محدودهٔ مشخصی از عملیات را پشتیبانی می‌کنند؛ در سایر سؤال‌ها مراحل و فرمول‌ها نمایش داده می‌شوند.</p></dialog>
+  <button class="mobile-backdrop" id="settings-backdrop" aria-label="بستن تنظیمات" hidden></button>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

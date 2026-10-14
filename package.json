@@ -1,0 +1,8 @@
+{
+  "name": "starcoach-hw05-generative-math-ui",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local browser assets for a LangGraph mathematics tutor",
+  "scripts": {"vendor": "node scripts/vendor.mjs"},
+  "devDependencies": {"katex": "0.19.0", "@fontsource/vazirmatn": "5.3.0"}
+}

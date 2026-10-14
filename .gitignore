@@ -1,0 +1,10 @@
+.env
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+*.pid
+.pytest_cache/
+session-*.json
+test-output/
