@@ -18,6 +18,9 @@ import webbrowser
 from core_bridge import MathTutorAgent, TutorSession, LLMProvider, TutorError, load_settings
 from demo_provider import DemoProvider
 from visuals import VisualSpec, choose_visual, sample_visual
+from history import HistoryStore
+from ui_provider import UIProvider
+from image_input import VisionReader, prepare_image, MAX_IMAGE_BYTES
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
@@ -34,8 +37,12 @@ class Conversation:
 
 
 class Workspace:
-    def __init__(self, *, demo=False, provider_factory=None):
+    def __init__(self, *, demo=False, provider_factory=None, db_path=None, vision_reader=None):
         self.demo = demo
+        self.store = HistoryStore(db_path)
+        self.vision = vision_reader
+        self.uploads = {}
+        self.image_slots = threading.BoundedSemaphore(2)
         self.config_error = ''
         self.model = 'دموی آفلاین' if demo else ''
         if provider_factory:
@@ -46,7 +53,8 @@ class Workspace:
             try:
                 settings = load_settings(ROOT / '.env')
                 self.model = settings.model
-                self.factory = lambda: LLMProvider(settings)
+                self.factory = lambda: UIProvider(settings)
+                self.vision = vision_reader or VisionReader(settings, os.getenv('VISION_MODEL', 'gpt-4.1-mini'))
             except TutorError:
                 self.config_error = 'تنظیمات مدل آماده نیست. فایل .env را طبق README تنظیم کن و برنامه را دوباره اجرا کن.'
                 self.factory = None
@@ -65,13 +73,61 @@ class Workspace:
                     del self.sessions[key]
             self.jobs = {k:v for k,v in self.jobs.items() if now-v['created'] < 3600 or v['status']=='running'}
             if len(self.sessions) >= 24:
-                raise TutorError('تعداد گفت‌وگوهای باز زیاد است. کمی بعد دوباره امتحان کن.')
+                idle = next((key for key, conv in self.sessions.items() if not conv.busy), None)
+                if idle is None:
+                    raise TutorError('تا پایان پاسخ فعلی صبر کن.')
+                self.sessions.pop(idle).provider.close()
             if not self.factory:
                 raise TutorError(self.config_error)
             provider = self.factory()
             identifier = secrets.token_urlsafe(24)
             self.sessions[identifier] = Conversation(TutorSession(MathTutorAgent(provider), language='fa'), provider)
+            self.store.create(identifier)
             return identifier
+
+    def conversation(self, identifier):
+        record = self.store.get(identifier)
+        if not record:
+            raise TutorError('گفت‌وگو پیدا نشد.')
+        return {k:v for k,v in record.items() if k != 'checkpoint'}
+
+    def restore(self, identifier):
+        if identifier in self.sessions:
+            return self.sessions[identifier]
+        record = self.store.get(identifier)
+        if not record or not self.factory:
+            raise TutorError('گفت‌وگو یا تنظیمات مدل در دسترس نیست.')
+        if len(self.sessions) >= 24:
+            idle = next((key for key, conv in self.sessions.items() if not conv.busy), None)
+            if idle is None:
+                raise TutorError('تا پایان پاسخ فعلی صبر کن.')
+            self.sessions.pop(idle).provider.close()
+        provider = self.factory()
+        session = TutorSession(MathTutorAgent(provider), language='fa')
+        for key in ('history', 'pending_request', 'previous_level', 'last_state', 'level', 'language'):
+            if key in record['checkpoint']:
+                setattr(session, key, record['checkpoint'][key])
+        conv = self.sessions[identifier] = Conversation(session, provider)
+        return conv
+
+    def read_image(self, payload):
+        if not self.vision:
+            raise TutorError('خواندن عکس در حالت آفلاین فعال نیست. برنامه را با تنظیمات مدل اجرا کن.')
+        if not self.image_slots.acquire(blocking=False):
+            raise TutorError('دو عکس در حال خواندن‌اند؛ کمی بعد دوباره امتحان کن.')
+        try:
+            uri, thumbnail = prepare_image(payload.get('image'))
+            result = self.vision.read(uri)
+            identifier = secrets.token_urlsafe(24)
+            with self.lock:
+                now = time.monotonic()
+                self.uploads = {k:v for k,v in self.uploads.items() if now-v['created'] < 3600}
+                if len(self.uploads) >= 24:
+                    self.uploads.pop(next(iter(self.uploads)))
+                self.uploads[identifier] = {'created':now, 'thumbnail':thumbnail}
+            return {**result, 'attachment_id':identifier, 'thumbnail':thumbnail}
+        finally:
+            self.image_slots.release()
 
     def send(self, payload):
         question = payload.get('question', '')
@@ -81,9 +137,16 @@ class Workspace:
         if level not in {'auto','beginner','intermediate','advanced'} or language not in {'fa','en','auto'}:
             raise TutorError('سطح یا زبان معتبر نیست.')
         with self.lock:
-            conv = self.sessions.get(payload.get('session_id'))
-            if not conv:
-                raise TutorError('گفت‌وگو پیدا نشد. گفت‌وگوی تازه‌ای بساز.')
+            identifier = payload.get('session_id')
+            if not isinstance(identifier, str):
+                raise TutorError('گفت‌وگو پیدا نشد.')
+            conv = self.restore(identifier)
+            attachment = None
+            if payload.get('attachment_id'):
+                attachment = self.uploads.get(payload['attachment_id'])
+                if not attachment or time.monotonic()-attachment['created'] > 3600:
+                    raise TutorError('عکس منقضی شده است؛ دوباره آن را اضافه کن.')
+                attachment = {'thumbnail':attachment['thumbnail']}
             if conv.busy:
                 raise TutorError('پاسخ قبلی هنوز در حال آماده شدن است.')
             conv.busy = True
@@ -92,10 +155,12 @@ class Workspace:
             job_id = secrets.token_urlsafe(24)
             self.jobs[job_id] = {'created':time.monotonic(), 'session_id':payload['session_id'],
                                  'status':'running', 'nodes':[], 'stage':'analyze_request'}
-        self.pool.submit(self._run, conv, job_id, question.strip())
+        self.pool.submit(self._run, conv, job_id, question.strip(), attachment)
         return job_id
 
-    def _run(self, conv, job_id, question):
+    def _run(self, conv, job_id, question, attachment=None):
+        checkpoint_keys = ('history', 'pending_request', 'previous_level', 'last_state', 'level', 'language')
+        before = {key:deepcopy(getattr(conv.session,key)) for key in checkpoint_keys}
         def progress(name):
             with self.lock:
                 self.jobs[job_id]['stage'] = name
@@ -112,14 +177,20 @@ class Workspace:
                 spec, data = VisualSpec(), {'kind':'steps'}
                 warning = 'نمایش بصری این سؤال قابل محاسبه نبود؛ توضیح و مراحل پاسخ در دسترس‌اند.'
             result = {'state':state, 'visual':spec.model_dump(), 'data':data,
-                      'visual_source':source, 'warning':warning, 'demo':self.demo}
+                      'visual_source':source, 'warning':warning, 'demo':self.demo, 'attachment':attachment}
             with self.lock:
+                checkpoint = {key:getattr(conv.session, key) for key in checkpoint_keys}
+                self.store.append(self.jobs[job_id]['session_id'], question, result, checkpoint)
                 self.jobs[job_id].update(status='completed', result=result)
         except TutorError as error:
             with self.lock:
+                for key, value in before.items():
+                    setattr(conv.session, key, value)
                 self.jobs[job_id].update(status='error', error=str(error))
         except Exception:
             with self.lock:
+                for key, value in before.items():
+                    setattr(conv.session, key, value)
                 self.jobs[job_id].update(status='error', error='اجرای این سؤال کامل نشد. دوباره امتحان کن یا سؤال را ساده‌تر بنویس.')
         finally:
             with self.lock:
@@ -143,10 +214,18 @@ class Workspace:
             conv.provider.close()
             del self.sessions[identifier]
 
+    def delete(self, identifier):
+        with self.lock:
+            self.clear(identifier)
+            self.store.delete(identifier)
+
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)
         for conv in self.sessions.values():
             conv.provider.close()
+        if self.vision:
+            self.vision.close()
+        self.store.close()
 
 
 def make_handler(workspace):
@@ -178,7 +257,15 @@ def make_handler(workspace):
             parsed = urlparse(self.path)
             if parsed.path == '/api/health':
                 return self.respond({'ready':not workspace.config_error, 'demo':workspace.demo,
-                                     'model':workspace.model, 'message':workspace.config_error})
+                                     'model':workspace.model, 'message':workspace.config_error,
+                                     'vision':bool(workspace.vision), 'vision_model':getattr(workspace.vision,'model','')})
+            if parsed.path == '/api/history':
+                return self.respond({'conversations':workspace.store.list()})
+            if parsed.path.startswith('/api/conversations/'):
+                try:
+                    return self.respond(workspace.conversation(parsed.path.rsplit('/',1)[1]))
+                except TutorError as error:
+                    return self.respond({'error':str(error)},404)
             if parsed.path.startswith('/api/jobs/'):
                 from urllib.parse import parse_qs
                 try:
@@ -205,7 +292,8 @@ def make_handler(workspace):
         def do_POST(self):
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 26000 or self.headers.get('Content-Type','').split(';')[0] != 'application/json':
+                limit = MAX_IMAGE_BYTES * 4 // 3 + 4096 if self.path == '/api/images' else 26000
+                if not 0 < length <= limit or self.headers.get('Content-Type','').split(';')[0] != 'application/json':
                     return self.respond({'error':'Invalid JSON request.'}, 400)
                 # Drain a bounded body before refusing it; unread bodies can cause
                 # TCP resets that hide the 403 response on Windows.
@@ -222,6 +310,14 @@ def make_handler(workspace):
                     return self.respond({'job_id':workspace.send(payload)}, 202)
                 if self.path == '/api/reset':
                     workspace.clear(payload.get('session_id'))
+                    return self.respond({'ok':True})
+                if self.path == '/api/images':
+                    return self.respond(workspace.read_image(payload))
+                if self.path == '/api/conversations/delete':
+                    workspace.delete(payload.get('session_id'))
+                    return self.respond({'ok':True})
+                if self.path == '/api/conversations/rename':
+                    workspace.store.rename(payload.get('session_id'),payload.get('title'))
                     return self.respond({'ok':True})
                 if self.path == '/api/visual':
                     spec = VisualSpec.model_validate(payload.get('visual'))
@@ -245,7 +341,7 @@ def main():
     parser.add_argument('--demo', action='store_true', help='Clearly labelled offline examples, through the same graph')
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
-    workspace = Workspace(demo=args.demo)
+    workspace = Workspace(demo=args.demo, db_path=ROOT / 'data' / ('demo-history.sqlite3' if args.demo else 'history.sqlite3'))
     try:
         server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(workspace))
     except OSError:

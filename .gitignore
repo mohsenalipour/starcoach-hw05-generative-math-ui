@@ -8,3 +8,4 @@ __pycache__/
 .pytest_cache/
 session-*.json
 test-output/
+data/

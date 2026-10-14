@@ -169,5 +169,36 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(status,400)
         self.workspace.sessions[sid].busy=False
 
+    def test_history_http_survives_release_and_supports_rename_and_delete(self):
+        _,session=self.request('/api/sessions',{});sid=session['session_id']
+        with patch('app.sample_visual',return_value={'kind':'steps'}):
+            _,job=self.request('/api/messages',{'session_id':sid,'question':'مشتق چیست؟'})
+            self.wait_job(job['job_id'],sid)
+        self.assertEqual(self.request('/api/reset',{'session_id':sid})[0],200)
+        _,listing=self.request('/api/history')
+        self.assertIn(sid,[entry['id'] for entry in listing['conversations']])
+        self.assertEqual(self.request('/api/conversations/rename',{'session_id':sid,'title':'تمرین من'})[0],200)
+        _,record=self.request('/api/conversations/'+sid)
+        self.assertEqual(record['title'],'تمرین من')
+        self.assertEqual(len(record['turns']),1)
+        self.assertNotIn('checkpoint',record)
+        self.assertEqual(self.request('/api/conversations/delete',{'session_id':sid})[0],200)
+        self.assertEqual(self.request('/api/conversations/'+sid)[0],404)
+
+    def test_image_http_decodes_before_vision_and_returns_only_preview(self):
+        from test_history_images import encoded_image
+        class Reader:
+            model='test'
+            def read(self,uri):return {'question':'2*x + 3 = 7','warning':'','readable':True}
+        with patch.object(self.workspace,'vision',Reader()):
+            for invalid in ['https://example.com/photo.png','not base64!']:
+                self.assertEqual(self.request('/api/images',{'image':invalid})[0],400)
+            self.assertEqual(self.request('/api/images',{'image':encoded_image()},origin='https://evil.example')[0],403)
+            status,result=self.request('/api/images',{'image':encoded_image()})
+            self.assertEqual(status,200)
+            self.assertIn('attachment_id',result)
+            self.assertIn('thumbnail',result)
+            self.assertNotIn('image',result)
+
 
 if __name__=='__main__':unittest.main()

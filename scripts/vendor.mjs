@@ -11,4 +11,8 @@ for (const file of ['vazirmatn-arabic-400-normal.woff2', 'vazirmatn-arabic-600-n
   await copyFile(path.join(root, 'node_modules/@fontsource/vazirmatn/files', file), path.join(out, 'vazirmatn', file));
 }
 await copyFile(path.join(root, 'node_modules/@fontsource/vazirmatn/LICENSE'), path.join(out, 'VAZIRMATN-LICENSE'));
-console.log('Local KaTeX and Vazirmatn assets prepared.');
+await mkdir(path.join(out, 'mathlive'), {recursive: true});
+await copyFile(path.join(root, 'node_modules/mathlive/mathlive.min.mjs'), path.join(out, 'mathlive/mathlive.min.mjs'));
+await cp(path.join(root, 'node_modules/mathlive/fonts'), path.join(out, 'mathlive/fonts'), {recursive: true});
+await copyFile(path.join(root, 'node_modules/mathlive/LICENSE.txt'), path.join(out, 'MATHLIVE-LICENSE'));
+console.log('Local KaTeX, MathLive and Vazirmatn assets prepared.');
