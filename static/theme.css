@@ -1,0 +1,139 @@
+/* Neutral surfaces and one blue accent; formulas inherit readable prose sizes. */
+:root {
+  --bg: #f5f7fa;
+  --paper: #ffffff;
+  --ink: #18212f;
+  --muted: #546173;
+  --line: #dde3ec;
+  --accent: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --purple: var(--accent);
+  --purple-pale: var(--accent-soft);
+  --shadow: 0 6px 24px #18212f05;
+}
+
+.sidebar { background: var(--paper); color: var(--ink); border-left: 1px solid var(--line); }
+.brand-mark { background: var(--ink); box-shadow: none; }
+.brand-mark span { color: #93c5fd; }
+.brand small, .sidebar-label, .sidebar-foot, .history-heading,
+.history-heading > span:last-child, .history-empty, .history-local,
+.history-open small, .sidebar .setting-label, .connection small { color: var(--muted); }
+.sidebar-divider, .connection { border-color: var(--line); }
+.sidebar-divider { background: var(--line); }
+.sidebar select, .history-section input {
+  background: var(--bg); color: var(--ink); border-color: var(--line);
+}
+.history-section input::placeholder { color: var(--muted); }
+.nav-item, .history-open { color: var(--ink); }
+.nav-item.selected { background: var(--accent-soft); color: var(--accent); }
+.nav-dot, .studio-dot { background: var(--accent); }
+.studio-dot { box-shadow: 0 0 0 5px var(--accent-soft); }
+.history-row.current { background: var(--accent-soft); border-color: #bfdbfe; }
+.history-menu button { color: var(--muted); }
+.history-menu button:hover { color: var(--accent); }
+.mobile-close, .dialog-close { color: var(--muted); }
+.history-list { scrollbar-color: #cbd5e1 transparent; }
+
+.topbar, .panel, .panel-heading, .composer, .composer-bottom, .turn { border-color: var(--line); }
+.breadcrumb, .breadcrumb strong, .panel-heading h2, .hero h1,
+.example strong, .welcome h3, .visual-title h3 { color: var(--ink); }
+.hero h1 em { color: var(--accent); }
+.hero h1 em::after { display: none; }
+.hero .eyebrow, .hero p, .example small, .subtle-label,
+.visual-title p, .visual-notice, .main-foot, .route-details,
+.composer-hint, .question-preview small, .top-subtitle { color: var(--muted); }
+.quiet-button, .new-button, .tool-button { color: var(--ink); border-color: var(--line); }
+.new-button:hover, .example:hover, .tool-button:hover { border-color: #93b4f6; }
+.example { background: var(--paper); border-color: var(--line); }
+.example-icon.purple, .example-icon.green, .example-icon.orange, .example-icon.blue {
+  background: #f1f5f9; color: #334155;
+}
+.tiny-icon, .text-button, .tool-button > span, .mobile-settings { color: var(--accent); }
+.user-message { background: #f1f5f9; border-color: var(--line); color: var(--ink); }
+.user-caption { color: var(--muted); }
+.turn.active { border-color: var(--line); }
+.answer-head { color: var(--ink); }
+.mini-logo { background: var(--accent-soft); color: var(--accent); }
+.answer-intro, .answer-plain { color: var(--ink); }
+.lesson-step, .lesson-step[open] { background: var(--paper); border-color: var(--line); }
+.lesson-step[open] { border-color: #a8bce7; }
+.lesson-step summary { color: #344256; }
+.step-number { background: var(--accent-soft); color: var(--accent); }
+.lesson-step .step-text { color: var(--ink); font-size: 14px; line-height: 2.2; padding: 16px 0; }
+.example-block { background: #f8fafc; border-color: #cbd5e1; }
+.example-block h4 { color: #344256; }
+.example-block .example-text { color: var(--ink); font-size: 14px; line-height: 2.2; }
+.result-card {
+  background: var(--paper); border: 1px solid #cbd5e1;
+  border-right: 4px solid var(--accent); box-shadow: 0 3px 12px #18212f04;
+}
+.result-card small { color: var(--accent); font-size: 12px; }
+.result-math { color: var(--ink); font-size: 24px; line-height: 1.5; }
+.check-question { background: #f8fafc; color: var(--ink); border: 1px solid var(--line); font-size: 14px; }
+.check-question b { color: #344256; font-size: 12px; }
+.route-list li { background: #f8fafc; color: var(--muted); border-color: var(--line); }
+.turn-select, .turn.active .turn-select { background: var(--paper); color: var(--accent); border-color: #cbd5e1; }
+.composer { background: #fafbfc; }
+.composer:focus-within { border-color: #a8bce7; box-shadow: inset 0 2px 0 var(--accent-soft); }
+.composer textarea { color: var(--ink); }
+.composer textarea::placeholder { color: var(--muted); }
+.send-button { background: var(--accent); color: #fff; box-shadow: none; }
+.send-button:hover { background: #1e40af; }
+.question-preview { color: var(--ink); background: var(--paper); border-color: #cbd5e1; }
+.attachment-preview { background: #f1f5f9; border-color: var(--line); }
+.attachment-preview strong, .attachment-preview small { color: var(--muted); }
+.progress { background: var(--accent-soft); color: var(--accent); border-color: #dbeafe; }
+.visual-badge { background: var(--accent-soft); color: var(--accent); }
+.formula-chip { background: var(--paper); color: var(--ink); border-color: var(--line); }
+.chart-box { background: #fcfdff; border-color: var(--line); }
+.chart-grid { stroke: #e8edf3; }
+.chart-axis { stroke: #94a3b8; }
+.chart-label { fill: #546173; }
+.chart-curve { stroke: var(--accent); }
+.chart-tangent { stroke: #475569; }
+.chart-legend, .control label { color: var(--muted); }
+.legend-dot { background: var(--accent); }
+.legend-dot.tangent { background: #475569; }
+.legend-dot.area { background: #bfdbfe; }
+.metric { background: #f8fafc; border-color: var(--line); }
+.metric span { color: var(--muted); }
+.metric strong { color: var(--ink); }
+.controls { background: #f8fafc; border-color: var(--line); }
+.control output { color: var(--accent); background: var(--accent-soft); }
+.control input[type=range], .editor-options input { accent-color: var(--accent); }
+.range-ends { color: var(--muted); }
+.visual-step > span { background: var(--accent-soft); color: var(--accent); }
+.visual-step p { color: var(--ink); font-size: 14px; }
+.chart-tooltip { color: var(--ink); border-color: var(--line); }
+
+.math-inline {
+  font: inherit; line-height: normal; background: none; padding: 0 .12em;
+  border-radius: 0; vertical-align: baseline; color: var(--ink);
+  direction: ltr; unicode-bidi: isolate;
+}
+.rendered-math { color: var(--ink); }
+.katex { font-size: 1.18em; }
+.math-block { background: #f8fafc; color: var(--ink); }
+.result-math .katex-display { margin: .4em 0; padding: 8px 3px; }
+
+dialog { color: var(--ink); background: var(--paper); border-color: var(--line); }
+dialog h2 { color: var(--ink); }
+dialog p, .formula-dialog p, .editor-options, .latex-details { color: var(--muted); }
+.formula-templates button { color: var(--ink); background: #f8fafc; border-color: var(--line); }
+.formula-templates button:hover { background: var(--accent-soft); border-color: #93b4f6; }
+math-field {
+  color: var(--ink); background: var(--paper); border-color: #a8bce7;
+  --caret-color: var(--accent); --selection-background-color: #dbeafe;
+}
+math-field::part(virtual-keyboard-toggle), math-field::part(menu-toggle) { color: var(--accent); }
+.latex-details textarea { background: #f8fafc; color: var(--ink); border-color: var(--line); }
+.welcome-orbit > span { background: var(--accent-soft); color: var(--accent); }
+.welcome p, .welcome-tags span { color: var(--muted); }
+
+button:focus-visible, a:focus-visible, select:focus-visible,
+input:focus-visible, textarea:focus-visible { outline-color: var(--accent); }
+
+@media (max-width: 680px) {
+  .result-math { font-size: 21px; }
+  .math-inline { max-width: 100%; }
+}

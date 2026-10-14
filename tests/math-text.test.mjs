@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mathSegments,normalizeAscii,insertMath}from '../static/math-text.mjs';
+import {mathSegments,normalizeAscii,insertMath,resultEquation}from '../static/math-text.mjs';
 import {convertAsciiMathToLatex}from 'mathlive';
 import katex from 'katex';
 
@@ -10,6 +10,36 @@ test('mixed Persian and LaTeX preserves prose and renders inline/block mathemati
   assert.equal(s.find(p=>p.display).text,'\\int_0^2 x^2\\,dx');
   assert.equal(s.map(p=>p.text).join(''),'مقدار \\frac{1}{2} را در نظر بگیر.\n\\int_0^2 x^2\\,dx');
   for(const p of s.filter(p=>p.kind==='math'))assert.doesNotThrow(()=>katex.renderToString(p.text,{throwOnError:true}));
+});
+
+test('final answers show the actual operation and equality without altering the result',()=>{
+  const derivative=resultEquation('3*x**2 + 2',{operation:'differentiate',expression:'x**3+2*x',variable:'x'},convertAsciiMathToLatex);
+  assert.ok(derivative.startsWith('\\frac{d}{dx}'));
+  assert.ok(derivative.includes(' = '));
+  const html=katex.renderToString(derivative,{throwOnError:true,displayMode:true});
+  assert.match(html,/class="mrel">=<\/span>/);
+  const partial=resultEquation('2*x',{operation:'differentiate',expression:'x**2+y',variable:'x'},convertAsciiMathToLatex);
+  assert.ok(partial.startsWith('\\frac{\\partial}{\\partial x}'));
+  assert.doesNotThrow(()=>katex.renderToString(partial,{throwOnError:true}));
+  const integral=resultEquation('8/3',{operation:'integrate',expression:'x**2',variable:'x',lower_bound:'0',upper_bound:'2'},convertAsciiMathToLatex);
+  assert.ok(integral.startsWith('\\int_{0}^{2}'));
+  assert.doesNotThrow(()=>katex.renderToString(integral,{throwOnError:true}));
+  const simplified=resultEquation('2*x',{operation:'simplify',expression:'x+x',variable:'x'},convertAsciiMathToLatex);
+  assert.ok(simplified.includes(' = '));
+  const determinant=resultEquation('-2',{operation:'determinant',expression:'[[1,2],[3,4]]'},convertAsciiMathToLatex);
+  assert.equal(determinant,'\\det\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix} = -2');
+  assert.doesNotThrow(()=>katex.renderToString(determinant,{throwOnError:true}));
+});
+
+test('root sets are not labelled as a scalar equality and existing equations are preserved',()=>{
+  const roots=resultEquation('[-1,1]',{operation:'solve',variable:'x'},convertAsciiMathToLatex);
+  assert.ok(roots.includes('\\in'));
+  assert.ok(!roots.includes('='));
+  assert.doesNotThrow(()=>katex.renderToString(roots,{throwOnError:true}));
+  const equation=resultEquation('x=2',{operation:'solve',variable:'x'},convertAsciiMathToLatex);
+  assert.equal((equation.match(/=/g)||[]).length,1);
+  assert.ok(resultEquation('2',{operation:'solve',variable:'y'},convertAsciiMathToLatex).startsWith('y = '));
+  assert.equal(resultEquation('3',null,convertAsciiMathToLatex),'3');
 });
 test('legacy powers and fractions are math; normal prose and HTML stay text',()=>{
   for(const text of ['مشتق x**3 + 2*x را حساب کن','مقدار 1/2 را ببین','رابطه f(x)=x^2 است']){
