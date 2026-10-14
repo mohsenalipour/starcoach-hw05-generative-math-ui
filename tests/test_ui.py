@@ -96,7 +96,7 @@ class VisualMathTests(unittest.TestCase):
         spec,source=choose_visual(agent.provider,state)
         self.assertEqual(state['status'],'answered')
         self.assertEqual(spec.expression,'x**3 + 2*x')
-        self.assertEqual(source,'fallback')
+        self.assertEqual(source,'tool')
 
 
 class HTTPTests(unittest.TestCase):

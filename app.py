@@ -17,7 +17,7 @@ import webbrowser
 
 from core_bridge import MathTutorAgent, TutorSession, LLMProvider, TutorError, load_settings
 from demo_provider import DemoProvider
-from visuals import VisualSpec, choose_visual, sample_visual
+from visuals import VisualSpec, choose_visual, sample_visual, fallback_spec, diagram_spec, compute_visual
 from history import HistoryStore
 from ui_provider import UIProvider
 from image_input import VisionReader, prepare_image, MAX_IMAGE_BYTES
@@ -34,6 +34,7 @@ class Conversation:
     provider: object
     touched: float = field(default_factory=time.monotonic)
     busy: bool = False
+    last_result: dict | None = None
 
 
 class Workspace:
@@ -42,6 +43,7 @@ class Workspace:
         self.store = HistoryStore(db_path)
         self.vision = vision_reader
         self.uploads = {}
+        self.visual_cache = {}
         self.image_slots = threading.BoundedSemaphore(2)
         self.config_error = ''
         self.model = 'دموی آفلاین' if demo else ''
@@ -89,7 +91,44 @@ class Workspace:
         record = self.store.get(identifier)
         if not record:
             raise TutorError('گفت‌وگو پیدا نشد.')
+        self._prepare_history_visuals(record)
         return {k:v for k,v in record.items() if k != 'checkpoint'}
+
+    def _visual_result(self, spec, state, previous=None):
+        if spec.kind == 'steps':
+            return spec, {'kind':'steps'}, ''
+        try:
+            return spec, sample_visual(spec), ''
+        except ValueError:
+            recovery = fallback_spec(state, previous)
+            if recovery.model_dump() != spec.model_dump():
+                try:
+                    return recovery, sample_visual(recovery), ''
+                except ValueError:
+                    pass
+            graphic = diagram_spec(state)
+            return graphic, compute_visual(graphic), 'نمودار عددی در این بازه قابل محاسبه نبود؛ نقشهٔ ارتباط مفاهیم نمایش داده شد.'
+
+    def _prepare_history_visuals(self, record):
+        """Upgrade old text-only views without an LLM or changing saved answers."""
+        previous = None
+        for turn in record['turns']:
+            result = turn['result']
+            if result['state']['status'] != 'answered':
+                continue
+            if result.get('visual', {}).get('kind', 'steps') == 'steps':
+                key = (record['id'], turn['created'])
+                with self.lock:
+                    cached = deepcopy(self.visual_cache.get(key))
+                if cached is None:
+                    spec, data, warning = self._visual_result(fallback_spec(result['state'], previous), result['state'], previous)
+                    cached = {'visual':spec.model_dump(), 'data':data, 'warning':warning, 'visual_source':'fallback'}
+                    with self.lock:
+                        if len(self.visual_cache) >= 64:
+                            self.visual_cache.pop(next(iter(self.visual_cache)))
+                        self.visual_cache[key] = deepcopy(cached)
+                result.update(cached)
+            previous = result
 
     def restore(self, identifier):
         if identifier in self.sessions:
@@ -97,6 +136,7 @@ class Workspace:
         record = self.store.get(identifier)
         if not record or not self.factory:
             raise TutorError('گفت‌وگو یا تنظیمات مدل در دسترس نیست.')
+        self._prepare_history_visuals(record)
         if len(self.sessions) >= 24:
             idle = next((key for key, conv in self.sessions.items() if not conv.busy), None)
             if idle is None:
@@ -107,7 +147,8 @@ class Workspace:
         for key in ('history', 'pending_request', 'previous_level', 'last_state', 'level', 'language'):
             if key in record['checkpoint']:
                 setattr(session, key, record['checkpoint'][key])
-        conv = self.sessions[identifier] = Conversation(session, provider)
+        last = next((t['result'] for t in reversed(record['turns']) if t['result']['state']['status']=='answered'), None)
+        conv = self.sessions[identifier] = Conversation(session, provider, last_result=last)
         return conv
 
     def read_image(self, payload):
@@ -169,18 +210,18 @@ class Workspace:
         try:
             state = conv.session.send(question)
             progress('design_visual')
-            spec, source = choose_visual(conv.provider, state)
-            warning = ''
-            try:
-                data = sample_visual(spec)
-            except ValueError:
-                spec, data = VisualSpec(), {'kind':'steps'}
-                warning = 'نمایش بصری این سؤال قابل محاسبه نبود؛ توضیح و مراحل پاسخ در دسترس‌اند.'
+            spec, source = choose_visual(conv.provider, state, conv.last_result)
+            selected_kind = spec.kind
+            spec, data, warning = self._visual_result(spec, state, conv.last_result)
+            if spec.kind != selected_kind:
+                source = 'fallback'
             result = {'state':state, 'visual':spec.model_dump(), 'data':data,
                       'visual_source':source, 'warning':warning, 'demo':self.demo, 'attachment':attachment}
             with self.lock:
                 checkpoint = {key:getattr(conv.session, key) for key in checkpoint_keys}
                 self.store.append(self.jobs[job_id]['session_id'], question, result, checkpoint)
+                if state['status'] == 'answered':
+                    conv.last_result = deepcopy(result)
                 self.jobs[job_id].update(status='completed', result=result)
         except TutorError as error:
             with self.lock:
@@ -218,6 +259,7 @@ class Workspace:
         with self.lock:
             self.clear(identifier)
             self.store.delete(identifier)
+            self.visual_cache = {k:v for k,v in self.visual_cache.items() if k[0] != identifier}
 
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)

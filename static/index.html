@@ -42,11 +42,11 @@
     <header class="topbar"><div class="breadcrumb"><span class="studio-dot"></span><strong id="conversation-title">میز مطالعه</strong><span class="top-subtitle">MATH STUDIO</span></div><div class="top-actions"><button id="settings-button" class="mobile-settings" aria-expanded="false">☰ تاریخچه</button><button class="quiet-button" id="export-button" disabled>↓ خروجی</button><button class="new-button" id="new-button">＋ گفت‌وگوی تازه</button></div></header>
     <div class="demo-banner" id="demo-banner" hidden>دموی آفلاین · پاسخ‌های نمونه با همان گراف اجرا می‌شوند. برای سؤال آزاد، حالت اصلی را اجرا کن.</div>
     <section class="hero"><div><div class="eyebrow"><span></span> فضای شخصی یادگیری ریاضی</div><h1>یک سؤال. <em>یک کشف تازه.</em></h1><p>بنویس، فرمول بساز یا عکس مسئله را اضافه کن. قدم‌به‌قدم بفهم و روی نمودار تجربه کن.</p></div><div class="hero-equation" aria-hidden="true">\[\frac{d}{dx}\,x^2=2x\]</div></section>
-    <section class="examples" id="examples" aria-label="سؤال‌های پیشنهادی">
-      <button class="example" data-example="tangent"><span class="example-icon purple">↗</span><span><strong>مشتق، با یک نگاه</strong><small>شیب لحظه‌ای را روی نمودار ببین</small></span><span class="example-arrow">↖</span></button>
-      <button class="example" data-example="integral"><span class="example-icon green">∫</span><span><strong>انتگرال را لمس کن</strong><small>از سهم‌های کوچک تا یک مقدار کل</small></span><span class="example-arrow">↖</span></button>
-      <button class="example" data-example="geometry"><span class="example-icon orange">△</span><span><strong>هندسهٔ زنده</strong><small>ضلع‌ها را تغییر بده، رابطه را کشف کن</small></span><span class="example-arrow">↖</span></button>
-      <button class="example" data-example="function"><span class="example-icon blue">ƒ</span><span><strong>اگر ضریب عوض شود؟</strong><small>یک تابع، چند رفتار متفاوت</small></span><span class="example-arrow">↖</span></button>
+    <section class="ideas" id="examples" aria-labelledby="ideas-heading">
+      <div class="ideas-heading"><div><span class="eyebrow">از یک ایده شروع کن</span><h2 id="ideas-heading">امروز چه چیزی را می‌خواهی ببینی؟</h2><p>یک موضوع انتخاب کن؛ سؤال آماده می‌شود و می‌توانی آن را تغییر بدهی.</p></div><span class="ideas-count">۱۶ ایده برای کشف</span></div>
+      <div id="idea-filters" class="idea-filters" role="group" aria-label="موضوع ایده‌ها"></div>
+      <div id="idea-grid" class="idea-grid"></div>
+      <div class="ideas-foot"><span id="idea-selection" role="status">از نمودار تا شکل؛ برای هر مفهوم، یک راه دیدن.</span><button id="ideas-expand" type="button" class="text-button">دیدن همهٔ ۱۶ ایده ↓</button></div>
     </section>
 
     <section class="study-grid">
@@ -79,7 +79,7 @@
     </section>
     <footer class="main-foot"><span>فهمیدن، از یک سؤال خوب شروع می‌شود.</span><span>ساخته‌شده برای یادگیری ✧</span></footer>
   </main>
-  <dialog id="guide-dialog"><button id="close-guide" class="dialog-close" aria-label="بستن راهنما">×</button><span class="eyebrow">چطور از مایلو استفاده کنم؟</span><h2>سؤال بپرس، تصویر را کاوش کن.</h2><ol><li>سطح دلخواهت را انتخاب کن یا تشخیص را به مدرس بسپار.</li><li>سؤال را بنویس؛ پاسخ و مراحل حل در سمت گفت‌وگو می‌آیند.</li><li>نمایش کنار پاسخ متناسب با سؤال انتخاب می‌شود. کنترل‌ها را تغییر بده و نتیجه را ببین.</li><li>برای ادامه، دربارهٔ همان پاسخ سؤال بپرس. زمینهٔ مکالمه حفظ می‌شود.</li></ol><p>تغییر پارامترها فقط نمایشِ کاوش را به‌روز می‌کند. برای حل یک مسئله با عددهای جدید، سؤال تازه بپرس.</p><p>نمودارها محدودهٔ مشخصی از عملیات را پشتیبانی می‌کنند؛ در سایر سؤال‌ها مراحل و فرمول‌ها نمایش داده می‌شوند.</p></dialog>
+  <dialog id="guide-dialog"><button id="close-guide" class="dialog-close" aria-label="بستن راهنما">×</button><span class="eyebrow">چطور از مایلو استفاده کنم؟</span><h2>سؤال بپرس، تصویر را کاوش کن.</h2><ol><li>سطح دلخواهت را انتخاب کن یا تشخیص را به مدرس بسپار.</li><li>از ایده‌های دسته‌بندی‌شده شروع کن، یا سؤال خودت را بنویس.</li><li>پاسخ و مراحل حل در گفت‌وگو و نمودار، شکل یا نقشهٔ روابط در آزمایشگاه می‌آیند.</li><li>برای ادامه، دربارهٔ همان پاسخ سؤال بپرس. زمینهٔ مکالمه و نمایش قبلی حفظ می‌شوند.</li></ol><p>تغییر پارامترها فقط نمایشِ کاوش را به‌روز می‌کند. برای حل یک مسئله با عددهای جدید، سؤال تازه بپرس.</p><p>اگر موضوع با نمودار عددی قابل نمایش نباشد، نقشهٔ تصویری ارتباط مفاهیم نشان داده می‌شود.</p></dialog>
   <button class="mobile-backdrop" id="settings-backdrop" aria-label="بستن تنظیمات" hidden></button>
   <dialog id="formula-dialog" class="formula-dialog" aria-labelledby="formula-heading">
     <button id="close-formula" class="dialog-close" aria-label="بستن ویرایشگر فرمول">×</button>
